@@ -1,0 +1,220 @@
+Proyecto Crud Completo en Laravel 10 y Filament (https://filamentphp.com/)
+Paso 1 Crear el proyecto
+- composer create-project laravel/laravel example-app
+
+Paso 2 Abrimos nuestro proyecto en code y en una terminal instalamos Filament
+- composer require filament/filament:"^3.0-stable" -W
+- php artisan filament:install --panels
+
+Paso 3 Unos cambios en .env cambiamos el nombre de la base de datos para este caso sera filament
+
+DB_CONNECTION=mysql
+DB_HOST=127.0.0.1
+DB_PORT=3306
+DB_DATABASE=filament
+DB_USERNAME=root
+DB_PASSWORD=
+
+despues ejecutamos el comando que nos creara la BD en nuestro proyecto le decimos yes cuando pregunte si deseamos crear la BD.
+- php artisan migrate
+
+Paso 4: Crearemos un usuario para ingresar al panel de administración:
+- php artisan make:filament-user
+
+Nos pedira los siguientes campos Name: admin Email: admin@gmail.com Password: 12345678 "Cuidado no se ve el tipeado en este campo"
+
+nos dara una url para logeo pero antes de entrar hay que levantar el servidor con:
+- php artisan serve
+
+Listo nos levanta nuestro sitio ahora para ingresar solo entramos a:
+-> http://localhost:8000/admin/login
+colocamos los datos del usuario que creamos admin@gmail.com y listo ya tenemos hasta el momento nuestro login y el dashboard funcionando y con una aprariencia buena :)
+
+Paso 5: Vamos a empezar a crear nuestras tablas relacionadas -> Nuestro modelo de datos y una migración esto es la tabla y la interface en nuestro proyecto. Para este caso que trabajamos con tablas relacionadas usaremos Categoria y Productos. Usamos los comandos:
+- php artisan make:model Category -m
+- php artisan make:model Product -m
+
+Paso 5.1 Muy importante ya tenemos nuestro modelo y tenemos nuestra migración debemos establecer los campos de nuestras tablas y posteriormente realizaremos nuestra migración para que se creen en nuestro servidor de base de datos.
+
+Empezamos por Category en el archivo database/migration/create_categories_table.php
+
+public function up(): void
+    {
+        Schema::create('categories', function (Blueprint $table) {
+            $table->id();
+            $table->string('description');
+            $table->timestamps();
+        });
+    }
+
+Seguimos con Products y vamos a hacer la relación y los metodos de cascada para el update y delete
+
+public function up(): void
+    {
+        Schema::create('products', function (Blueprint $table) {
+            $table->id();
+            $table->string('description');
+            $table->decimal('price',10,2);
+            $table->integer('stock');
+
+            //Relación tabla clave foranea
+            $table->foreignID('categories_id')
+            ->constrained('categories')
+            ->cascadeOnUpdate()
+            ->cascadeOnDelete();
+            $table->timestamps();
+        });
+    }
+
+Paso 5.2 Finalizamos ejecutando el comando para migrar los cambios y actualizarlos:
+- php artisan migrate:refresh
+
+Nota al hacer el migrate se borran los datos que tenemos hay que tener cuidado con esto.
+
+Hasta aqui tenemos avanzado un gran paso en el backend :)
+
+Paso 6 Ahora vamos a trabajar con nuestros Modelos en app/Models/ Category and Products de forma automatica vamos a generar el crud para nuestras tablas solo ejecutando un comando y claro dando una pequeña personalización.
+- php artisan make:filament-resource Category --generate
+Ya tenemos el frond end pero nos hace falta editar los Models de nuestra app.
+
+Paso 6.1 Editamos en app/Models Category y Product esto es necesario para que nuestros crud trabajen. Pondremos una función en cada archivo que permitira la relación de las tablas.
+
+--> Category.php
+class Category extends Model
+{
+    use HasFactory;
+
+    //Vamos a poner los campos que vamos a llenar
+    protected $fillable = ['description'];
+
+    //Vamos a crear una función para establecer la relación
+
+    public function products(){
+        //Función tiene muchos
+        return $this->hasMany(Product::class, 'id');
+    }
+
+}
+
+--> Product.php
+class Product extends Model
+{
+    use HasFactory;
+
+    //$fillable es el nombre del arreglo para el query
+    protected $fillable = ['description', 'price', 'stock', 'categories_id'];
+
+    public function categories()
+    {
+        return $this->belongsTo(Category::class. 'categories_id');
+    }
+}
+
+Nota los nombres de las funciones estan inversos para que una alimente a la otra tabla y listo vamos a ver y ya tenemos el crud listo.
+
+Paso 6.2 Editamos el formulario.
+Por ejemplo yo le cambie a esta funcion el que mostrara de la tabla la fecha de creación y actualización de registros
+
+public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('categories_id')
+                    ->numeric()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('description')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('price')
+                    ->money()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('stock')
+                    ->numeric()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+//Aqui cambie de true a false
+                    ->toggleable(isToggledHiddenByDefault: false),
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+//Aqui cambie de true a false
+                    ->toggleable(isToggledHiddenByDefault: false),
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+Y ahora algo muy basico vamos a cambiar el formulario de productos para que la categories_id se seleccione de una lista en lugar de poner su id
+
+public static function form(Form $form): Form
+    {
+        return $form
+            ->schema([
+                Forms\Components\Select::make('categories_id')
+                    ->relationship('categories', 'description')
+                    ->required()
+                    ->searchable()
+                    ->preload(),
+                Forms\Components\TextInput::make('description')
+                    ->required()
+                    ->maxLength(255),
+                Forms\Components\TextInput::make('price')
+                    ->required()
+                    ->numeric()
+                    ->prefix('$'),
+                Forms\Components\TextInput::make('stock')
+                    ->required()
+                    ->numeric(),
+            ]);
+    }
+
+    public static function table(Table $table): Table
+    {
+        return $table
+            ->columns([
+                Tables\Columns\TextColumn::make('categories.description')
+                    ->numeric()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('description')
+                    ->searchable(),
+                Tables\Columns\TextColumn::make('price')
+                    ->money()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('stock')
+                    ->numeric()
+                    ->sortable(),
+                Tables\Columns\TextColumn::make('created_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
+                Tables\Columns\TextColumn::make('updated_at')
+                    ->dateTime()
+                    ->sortable()
+                    ->toggleable(isToggledHiddenByDefault: false),
+            ])
+            ->filters([
+                //
+            ])
+            ->actions([
+                Tables\Actions\EditAction::make(),
+            ])
+            ->bulkActions([
+                Tables\Actions\BulkActionGroup::make([
+                    Tables\Actions\DeleteBulkAction::make(),
+                ]),
+            ]);
+    }
+
+cambiamos el campo que se muestra pero seguimos registrando el categories_id
+
+

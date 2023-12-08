@@ -217,4 +217,28 @@ public static function form(Form $form): Form
 
 cambiamos el campo que se muestra pero seguimos registrando el categories_id
 
+Paso 7 Redireccionar
+En el archivo CatogoryResource y ProductResource agregamos una funcion
+
+class CreateCategory extends CreateRecord
+{
+    protected static string $resource = CategoryResource::class;
+
+    //Funcion para redireccionar
+
+    protected function getRedirectUrl(): string{
+        return $this->getResource()::getUrl('index');
+    }
+}
+
+class CreateProduct extends CreateRecord
+{
+    protected static string $resource = ProductResource::class;
+
+    //Funcion para redireccionar
+
+    protected function getRedirectUrl(): string{
+        return $this->getResource()::getUrl('index');
+    }
+}
 
